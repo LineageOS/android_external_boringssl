@@ -343,7 +343,7 @@ static EC_GROUP *ec_group_new_from_data(const struct built_in_curve *curve) {
   EC_GROUP *group = NULL;
   EC_POINT *P = NULL;
   BN_CTX *ctx = NULL;
-  BIGNUM *p = NULL, *a = NULL, *b = NULL, *x = NULL, *y = NULL, *order = NULL;
+  BIGNUM *p = NULL, *a = NULL, *b = NULL, *x = NULL, *y = NULL;
   int ok = 0;
   unsigned param_len;
   const EC_METHOD *meth;
@@ -395,20 +395,14 @@ static EC_GROUP *ec_group_new_from_data(const struct built_in_curve *curve) {
     OPENSSL_PUT_ERROR(EC, ec_group_new_from_data, ERR_R_EC_LIB);
     goto err;
   }
-  if (!(order = BN_bin2bn(params + 5 * param_len, param_len, NULL)) ||
-      !BN_set_word(x, (BN_ULONG)data->cofactor)) {
+  if (!BN_bin2bn(params + 5 * param_len, param_len, &group->order) ||
+      !BN_set_word(&group->cofactor, (BN_ULONG)data->cofactor)) {
     OPENSSL_PUT_ERROR(EC, ec_group_new_from_data, ERR_R_BN_LIB);
     goto err;
   }
 
   group->generator = P;
   P = NULL;
-  if (!BN_copy(&group->order, order) ||
-      !BN_set_word(&group->cofactor, (BN_ULONG)data->cofactor)) {
-    OPENSSL_PUT_ERROR(EC, ec_group_new_from_data, ERR_R_BN_LIB);
-    goto err;
-  }
-
   ok = 1;
 
 err:
@@ -421,7 +415,6 @@ err:
   BN_free(p);
   BN_free(a);
   BN_free(b);
-  BN_free(order);
   BN_free(x);
   BN_free(y);
   return group;
