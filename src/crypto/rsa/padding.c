@@ -548,6 +548,18 @@ decoding_err:
 
 static const unsigned char zeroes[] = {0,0,0,0,0,0,0,0};
 
+#if 1
+//Needed by libwvdrmengine.so
+int RSA_verify_PKCS1_PSS(RSA *rsa,
+			 const unsigned char *mHash,
+			 const EVP_MD *Hash,
+			 const unsigned char *EM,
+			 int sLen)
+{
+	return RSA_verify_PKCS1_PSS_mgf1(rsa, mHash, Hash, NULL, EM, sLen);
+}
+#endif
+
 int RSA_verify_PKCS1_PSS_mgf1(RSA *rsa, const uint8_t *mHash,
                               const EVP_MD *Hash, const EVP_MD *mgf1Hash,
                               const uint8_t *EM, int sLen) {

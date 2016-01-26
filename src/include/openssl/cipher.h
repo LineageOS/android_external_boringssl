@@ -174,6 +174,12 @@ OPENSSL_EXPORT int EVP_EncryptUpdate(EVP_CIPHER_CTX *ctx, uint8_t *out,
                                      int *out_len, const uint8_t *in,
                                      int in_len);
 
+#if 1
+//Needed by libwvdrmengine.so
+OPENSSL_EXPORT int EVP_EncryptFinal(EVP_CIPHER_CTX *ctx, uint8_t *out,
+                                       int *out_len);
+#endif
+
 /* EVP_EncryptFinal_ex writes at most a block of ciphertext to |out| and sets
  * |*out_len| to the number of bytes written. If padding is enabled (the
  * default) then standard padding is applied to create the final block. If

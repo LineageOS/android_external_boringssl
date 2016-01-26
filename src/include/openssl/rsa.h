@@ -286,6 +286,15 @@ OPENSSL_EXPORT int RSA_check_key(const RSA *rsa);
  * otherwise. */
 OPENSSL_EXPORT int RSA_recover_crt_params(RSA *rsa);
 
+#if 1
+//Needed by libwvdrmengine.so
+OPENSSL_EXPORT int RSA_verify_PKCS1_PSS(RSA *rsa,
+			                                  const unsigned char *mHash,
+			                                  const EVP_MD *Hash,
+			                                  const unsigned char *EM,
+			                                  int sLen);
+#endif
+
 /* RSA_verify_PKCS1_PSS_mgf1 verifies that |EM| is a correct PSS padding of
  * |mHash|, where |mHash| is a digest produced by |Hash|. |EM| must point to
  * exactly |RSA_size(rsa)| bytes of data. The |mgf1Hash| argument specifies the
