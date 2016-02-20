@@ -1,7 +1,7 @@
 LOCAL_ADDITIONAL_DEPENDENCIES += $(LOCAL_PATH)/sources.mk
 include $(LOCAL_PATH)/sources.mk
 
-LOCAL_CFLAGS += -I$(LOCAL_PATH)/src/include -I$(LOCAL_PATH)/src/crypto -Wno-unused-parameter
+LOCAL_CFLAGS += -I$(LOCAL_PATH)/src/include -I$(LOCAL_PATH)/src/crypto -Wno-unused-parameter -std=gnu11
 # Do not add in the architecture-specific files if we don't want to build assembly
 ifeq (,$(filter -DOPENSSL_NO_ASM,$(LOCAL_CFLAGS)))
 LOCAL_SRC_FILES_x86 = $(linux_x86_sources)
