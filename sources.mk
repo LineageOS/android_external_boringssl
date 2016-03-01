@@ -106,7 +106,9 @@ crypto_sources := \
   src/crypto/cipher/tls_cbc.c\
   src/crypto/cmac/cmac.c\
   src/crypto/conf/conf.c\
+  src/crypto/cpu-aarch64-linux.c\
   src/crypto/cpu-arm.c\
+  src/crypto/cpu-arm-linux.c\
   src/crypto/cpu-intel.c\
   src/crypto/crypto.c\
   src/crypto/curve25519/curve25519.c\
@@ -348,7 +350,6 @@ linux_arm_sources := \
   linux-arm/crypto/sha/sha256-armv4.S\
   linux-arm/crypto/sha/sha512-armv4.S\
   src/crypto/chacha/chacha_vec_arm.S\
-  src/crypto/cpu-arm-asm.S\
   src/crypto/curve25519/asm/x25519-asm-arm.S\
   src/crypto/poly1305/poly1305_arm_asm.S\
 
