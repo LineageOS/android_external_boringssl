@@ -127,7 +127,6 @@ static bool test_asc2bn(BN_CTX *ctx);
 static bool test_mpi();
 static bool test_rand();
 static bool test_asn1();
-static bool TestBN2Dec();
 
 static const uint8_t kSample[] =
     "\xC6\x4F\x43\x04\x2A\xEA\xCA\x6E\x58\x36\x80\x5B\xE8\xC9"
@@ -326,12 +325,6 @@ int main(int argc, char *argv[]) {
       !test_asn1()) {
     return 1;
   }
-
-  message(bc_file.get(), "BN_bn2dec");
-  if (!TestBN2Dec()) {
-    return 1;
-  }
-  flush_fp(bc_file.get());
 
   printf("PASS\n");
   return 0;
@@ -857,8 +850,14 @@ static bool test_div_word(FILE *fp) {
       return false;
     }
     BN_ULONG s = b->d[0];
+    BN_ULONG rmod = BN_mod_word(b.get(), s);
     BN_ULONG r = BN_div_word(b.get(), s);
     if (r == (BN_ULONG)-1) {
+      return false;
+    }
+
+    if (rmod != r) {
+      fprintf(stderr, "Mod (word) test failed!\n");
       return false;
     }
 
@@ -1806,8 +1805,8 @@ static const ASN1InvalidTest kASN1InvalidTests[] = {
     {"\x02\x00", 2},
 };
 
-// kASN1BuggyTests are incorrect encodings and how |BN_cbs2unsigned_buggy|
-// should interpret them.
+// kASN1BuggyTests contains incorrect encodings and the corresponding, expected
+// results of |BN_parse_asn1_unsigned_buggy| given that input.
 static const ASN1Test kASN1BuggyTests[] = {
     // Negative numbers.
     {"128", "\x02\x01\x80", 3},
@@ -1830,7 +1829,7 @@ static bool test_asn1() {
     }
     CBS cbs;
     CBS_init(&cbs, reinterpret_cast<const uint8_t*>(test.der), test.der_len);
-    if (!BN_cbs2unsigned(&cbs, bn2.get()) || CBS_len(&cbs) != 0) {
+    if (!BN_parse_asn1_unsigned(&cbs, bn2.get()) || CBS_len(&cbs) != 0) {
       fprintf(stderr, "Parsing ASN.1 INTEGER failed.\n");
       return false;
     }
@@ -1845,7 +1844,7 @@ static bool test_asn1() {
     size_t der_len;
     CBB_zero(&cbb);
     if (!CBB_init(&cbb, 0) ||
-        !BN_bn2cbb(&cbb, bn.get()) ||
+        !BN_marshal_asn1(&cbb, bn.get()) ||
         !CBB_finish(&cbb, &der, &der_len)) {
       CBB_cleanup(&cbb);
       return false;
@@ -1857,9 +1856,9 @@ static bool test_asn1() {
       return false;
     }
 
-    // |BN_cbs2unsigned_buggy| parses all valid input.
+    // |BN_parse_asn1_unsigned_buggy| parses all valid input.
     CBS_init(&cbs, reinterpret_cast<const uint8_t*>(test.der), test.der_len);
-    if (!BN_cbs2unsigned_buggy(&cbs, bn2.get()) || CBS_len(&cbs) != 0) {
+    if (!BN_parse_asn1_unsigned_buggy(&cbs, bn2.get()) || CBS_len(&cbs) != 0) {
       fprintf(stderr, "Parsing ASN.1 INTEGER failed.\n");
       return false;
     }
@@ -1876,16 +1875,16 @@ static bool test_asn1() {
     }
     CBS cbs;
     CBS_init(&cbs, reinterpret_cast<const uint8_t*>(test.der), test.der_len);
-    if (BN_cbs2unsigned(&cbs, bn.get())) {
+    if (BN_parse_asn1_unsigned(&cbs, bn.get())) {
       fprintf(stderr, "Parsed invalid input.\n");
       return false;
     }
     ERR_clear_error();
 
     // All tests in kASN1InvalidTests are also rejected by
-    // |BN_cbs2unsigned_buggy|.
+    // |BN_parse_asn1_unsigned_buggy|.
     CBS_init(&cbs, reinterpret_cast<const uint8_t*>(test.der), test.der_len);
-    if (BN_cbs2unsigned_buggy(&cbs, bn.get())) {
+    if (BN_parse_asn1_unsigned_buggy(&cbs, bn.get())) {
       fprintf(stderr, "Parsed invalid input.\n");
       return false;
     }
@@ -1893,7 +1892,7 @@ static bool test_asn1() {
   }
 
   for (const ASN1Test &test : kASN1BuggyTests) {
-    // These broken encodings are rejected by |BN_cbs2unsigned|.
+    // These broken encodings are rejected by |BN_parse_asn1_unsigned|.
     ScopedBIGNUM bn(BN_new());
     if (!bn) {
       return false;
@@ -1901,20 +1900,20 @@ static bool test_asn1() {
 
     CBS cbs;
     CBS_init(&cbs, reinterpret_cast<const uint8_t*>(test.der), test.der_len);
-    if (BN_cbs2unsigned(&cbs, bn.get())) {
+    if (BN_parse_asn1_unsigned(&cbs, bn.get())) {
       fprintf(stderr, "Parsed invalid input.\n");
       return false;
     }
     ERR_clear_error();
 
-    // However |BN_cbs2unsigned_buggy| accepts them.
+    // However |BN_parse_asn1_unsigned_buggy| accepts them.
     ScopedBIGNUM bn2 = ASCIIToBIGNUM(test.value_ascii);
     if (!bn2) {
       return false;
     }
 
     CBS_init(&cbs, reinterpret_cast<const uint8_t*>(test.der), test.der_len);
-    if (!BN_cbs2unsigned_buggy(&cbs, bn.get()) || CBS_len(&cbs) != 0) {
+    if (!BN_parse_asn1_unsigned_buggy(&cbs, bn.get()) || CBS_len(&cbs) != 0) {
       fprintf(stderr, "Parsing (invalid) ASN.1 INTEGER failed.\n");
       return false;
     }
@@ -1933,47 +1932,12 @@ static bool test_asn1() {
   CBB cbb;
   CBB_zero(&cbb);
   if (!CBB_init(&cbb, 0) ||
-      BN_bn2cbb(&cbb, bn.get())) {
+      BN_marshal_asn1(&cbb, bn.get())) {
     fprintf(stderr, "Serialized negative number.\n");
     CBB_cleanup(&cbb);
     return false;
   }
   CBB_cleanup(&cbb);
-
-  return true;
-}
-
-static bool TestBN2Dec() {
-  static const char *kBN2DecTests[] = {
-      "0",
-      "1",
-      "-1",
-      "100",
-      "-100",
-      "123456789012345678901234567890",
-      "-123456789012345678901234567890",
-      "123456789012345678901234567890123456789012345678901234567890",
-      "-123456789012345678901234567890123456789012345678901234567890",
-  };
-
-  for (const char *test : kBN2DecTests) {
-    ScopedBIGNUM bn;
-    int ret = DecimalToBIGNUM(&bn, test);
-    if (ret == 0) {
-      return false;
-    }
-
-    ScopedOpenSSLString dec(BN_bn2dec(bn.get()));
-    if (!dec) {
-      fprintf(stderr, "BN_bn2dec failed on %s.\n", test);
-      return false;
-    }
-
-    if (strcmp(dec.get(), test) != 0) {
-      fprintf(stderr, "BN_bn2dec gave %s, wanted %s.\n", dec.get(), test);
-      return false;
-    }
-  }
 
   return true;
 }
