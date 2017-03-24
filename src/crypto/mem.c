@@ -66,9 +66,9 @@
 #include <string.h>
 
 #if defined(OPENSSL_WINDOWS)
-#pragma warning(push, 3)
+OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <windows.h>
-#pragma warning(pop)
+OPENSSL_MSVC_PRAGMA(warning(pop))
 #else
 #include <strings.h>
 #endif
@@ -104,9 +104,9 @@ void *OPENSSL_realloc_clean(void *ptr, size_t old_size, size_t new_size) {
 
 void OPENSSL_cleanse(void *ptr, size_t len) {
 #if defined(OPENSSL_WINDOWS)
-	SecureZeroMemory(ptr, len);
+  SecureZeroMemory(ptr, len);
 #else
-	memset(ptr, 0, len);
+  memset(ptr, 0, len);
 
 #if !defined(OPENSSL_NO_ASM)
   /* As best as we can tell, this is sufficient to break any optimisations that
@@ -118,12 +118,11 @@ void OPENSSL_cleanse(void *ptr, size_t len) {
 }
 
 int CRYPTO_memcmp(const void *in_a, const void *in_b, size_t len) {
-  size_t i;
   const uint8_t *a = in_a;
   const uint8_t *b = in_b;
   uint8_t x = 0;
 
-  for (i = 0; i < len; i++) {
+  for (size_t i = 0; i < len; i++) {
     x |= a[i] ^ b[i];
   }
 
@@ -147,8 +146,6 @@ uint32_t OPENSSL_hash32(const void *ptr, size_t len) {
   return h;
 }
 
-char *OPENSSL_strdup(const char *s) { return strdup(s); }
-
 size_t OPENSSL_strnlen(const char *s, size_t len) {
   size_t i;
 
@@ -163,6 +160,8 @@ size_t OPENSSL_strnlen(const char *s, size_t len) {
 
 #if defined(OPENSSL_WINDOWS)
 
+char *OPENSSL_strdup(const char *s) { return _strdup(s); }
+
 int OPENSSL_strcasecmp(const char *a, const char *b) {
   return _stricmp(a, b);
 }
@@ -172,6 +171,8 @@ int OPENSSL_strncasecmp(const char *a, const char *b, size_t n) {
 }
 
 #else
+
+char *OPENSSL_strdup(const char *s) { return strdup(s); }
 
 int OPENSSL_strcasecmp(const char *a, const char *b) {
   return strcasecmp(a, b);

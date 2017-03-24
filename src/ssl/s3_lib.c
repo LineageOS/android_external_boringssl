@@ -149,7 +149,6 @@
 #include <openssl/ssl.h>
 
 #include <assert.h>
-#include <stdio.h>
 #include <string.h>
 
 #include <openssl/buf.h>
@@ -158,24 +157,10 @@
 #include <openssl/err.h>
 #include <openssl/md5.h>
 #include <openssl/mem.h>
-#include <openssl/obj.h>
+#include <openssl/nid.h>
 
 #include "internal.h"
 
-
-const SSL3_ENC_METHOD SSLv3_enc_data = {
-    ssl3_prf,
-    tls1_setup_key_block,
-    tls1_generate_master_secret,
-    tls1_change_cipher_state,
-    ssl3_final_finish_mac,
-    ssl3_cert_verify_mac,
-    SSL3_MD_CLIENT_FINISHED_CONST, 4,
-    SSL3_MD_SERVER_FINISHED_CONST, 4,
-    ssl3_alert_code,
-    tls1_export_keying_material,
-    0,
-};
 
 int ssl3_supports_cipher(const SSL_CIPHER *cipher) {
   return 1;
@@ -186,7 +171,6 @@ int ssl3_set_handshake_header(SSL *ssl, int htype, unsigned long len) {
   *(p++) = htype;
   l2n3(len, p);
   ssl->init_num = (int)len + SSL3_HM_HEADER_LENGTH;
-  ssl->init_off = 0;
 
   /* Add the message to the handshake hash. */
   return ssl3_update_handshake_hash(ssl, (uint8_t *)ssl->init_buf->data,
@@ -196,6 +180,10 @@ int ssl3_set_handshake_header(SSL *ssl, int htype, unsigned long len) {
 int ssl3_handshake_write(SSL *ssl) {
   return ssl3_do_write(ssl, SSL3_RT_HANDSHAKE);
 }
+
+void ssl3_expect_flight(SSL *ssl) {}
+
+void ssl3_received_flight(SSL *ssl) {}
 
 int ssl3_new(SSL *ssl) {
   SSL3_STATE *s3;
@@ -211,11 +199,11 @@ int ssl3_new(SSL *ssl) {
 
   ssl->s3 = s3;
 
-  /* Set the version to the highest supported version for TLS. This controls the
-   * initial state of |ssl->enc_method| and what the API reports as the version
-   * prior to negotiation.
+  /* Set the version to the highest supported version.
    *
-   * TODO(davidben): This is fragile and confusing. */
+   * TODO(davidben): Move this field into |s3|, have it store the normalized
+   * protocol version, and implement this pre-negotiation quirk in |SSL_version|
+   * at the API boundary rather than in internal state. */
   ssl->version = TLS1_2_VERSION;
   return 1;
 err:
@@ -235,216 +223,18 @@ void ssl3_free(SSL *ssl) {
 
   sk_X509_NAME_pop_free(ssl->s3->tmp.ca_names, X509_NAME_free);
   OPENSSL_free(ssl->s3->tmp.certificate_types);
-  OPENSSL_free(ssl->s3->tmp.peer_ellipticcurvelist);
+  OPENSSL_free(ssl->s3->tmp.peer_supported_group_list);
   OPENSSL_free(ssl->s3->tmp.peer_psk_identity_hint);
   ssl3_free_handshake_buffer(ssl);
   ssl3_free_handshake_hash(ssl);
+  OPENSSL_free(ssl->s3->next_proto_negotiated);
   OPENSSL_free(ssl->s3->alpn_selected);
+  SSL_AEAD_CTX_free(ssl->s3->aead_read_ctx);
+  SSL_AEAD_CTX_free(ssl->s3->aead_write_ctx);
 
   OPENSSL_cleanse(ssl->s3, sizeof *ssl->s3);
   OPENSSL_free(ssl->s3);
   ssl->s3 = NULL;
-}
-
-int SSL_session_reused(const SSL *ssl) {
-  return ssl->hit;
-}
-
-int SSL_total_renegotiations(const SSL *ssl) {
-  return ssl->s3->total_renegotiations;
-}
-
-int SSL_num_renegotiations(const SSL *ssl) {
-  return SSL_total_renegotiations(ssl);
-}
-
-int SSL_CTX_need_tmp_RSA(const SSL_CTX *ctx) {
-  return 0;
-}
-
-int SSL_need_rsa(const SSL *ssl) {
-  return 0;
-}
-
-int SSL_CTX_set_tmp_rsa(SSL_CTX *ctx, const RSA *rsa) {
-  return 1;
-}
-
-int SSL_set_tmp_rsa(SSL *ssl, const RSA *rsa) {
-  return 1;
-}
-
-int SSL_CTX_set_tmp_dh(SSL_CTX *ctx, const DH *dh) {
-  DH_free(ctx->cert->dh_tmp);
-  ctx->cert->dh_tmp = DHparams_dup(dh);
-  if (ctx->cert->dh_tmp == NULL) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_DH_LIB);
-    return 0;
-  }
-  return 1;
-}
-
-int SSL_set_tmp_dh(SSL *ssl, const DH *dh) {
-  DH_free(ssl->cert->dh_tmp);
-  ssl->cert->dh_tmp = DHparams_dup(dh);
-  if (ssl->cert->dh_tmp == NULL) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_DH_LIB);
-    return 0;
-  }
-  return 1;
-}
-
-int SSL_CTX_set_tmp_ecdh(SSL_CTX *ctx, const EC_KEY *ec_key) {
-  if (ec_key == NULL || EC_KEY_get0_group(ec_key) == NULL) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_PASSED_NULL_PARAMETER);
-    return 0;
-  }
-  int nid = EC_GROUP_get_curve_name(EC_KEY_get0_group(ec_key));
-  return SSL_CTX_set1_curves(ctx, &nid, 1);
-}
-
-int SSL_set_tmp_ecdh(SSL *ssl, const EC_KEY *ec_key) {
-  if (ec_key == NULL || EC_KEY_get0_group(ec_key) == NULL) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_PASSED_NULL_PARAMETER);
-    return 0;
-  }
-  int nid = EC_GROUP_get_curve_name(EC_KEY_get0_group(ec_key));
-  return SSL_set1_curves(ssl, &nid, 1);
-}
-
-int SSL_CTX_enable_tls_channel_id(SSL_CTX *ctx) {
-  ctx->tlsext_channel_id_enabled = 1;
-  return 1;
-}
-
-int SSL_enable_tls_channel_id(SSL *ssl) {
-  ssl->tlsext_channel_id_enabled = 1;
-  return 1;
-}
-
-int SSL_CTX_set1_tls_channel_id(SSL_CTX *ctx, EVP_PKEY *private_key) {
-  ctx->tlsext_channel_id_enabled = 1;
-  if (EVP_PKEY_id(private_key) != EVP_PKEY_EC ||
-      EVP_PKEY_bits(private_key) != 256) {
-    OPENSSL_PUT_ERROR(SSL, SSL_R_CHANNEL_ID_NOT_P256);
-    return 0;
-  }
-  EVP_PKEY_free(ctx->tlsext_channel_id_private);
-  ctx->tlsext_channel_id_private = EVP_PKEY_up_ref(private_key);
-  return 1;
-}
-
-int SSL_set1_tls_channel_id(SSL *ssl, EVP_PKEY *private_key) {
-  EC_KEY *ec_key = EVP_PKEY_get0_EC_KEY(private_key);
-  if (ec_key == NULL ||
-      EC_GROUP_get_curve_name(EC_KEY_get0_group(ec_key)) !=
-          NID_X9_62_prime256v1) {
-    OPENSSL_PUT_ERROR(SSL, SSL_R_CHANNEL_ID_NOT_P256);
-    return 0;
-  }
-
-  EVP_PKEY_free(ssl->tlsext_channel_id_private);
-  ssl->tlsext_channel_id_private = EVP_PKEY_up_ref(private_key);
-  ssl->tlsext_channel_id_enabled = 1;
-
-  return 1;
-}
-
-size_t SSL_get_tls_channel_id(SSL *ssl, uint8_t *out, size_t max_out) {
-  if (!ssl->s3->tlsext_channel_id_valid) {
-    return 0;
-  }
-  memcpy(out, ssl->s3->tlsext_channel_id, (max_out < 64) ? max_out : 64);
-  return 64;
-}
-
-int SSL_set_tlsext_host_name(SSL *ssl, const char *name) {
-  OPENSSL_free(ssl->tlsext_hostname);
-  ssl->tlsext_hostname = NULL;
-
-  if (name == NULL) {
-    return 1;
-  }
-  if (strlen(name) > TLSEXT_MAXLEN_host_name) {
-    OPENSSL_PUT_ERROR(SSL, SSL_R_SSL3_EXT_INVALID_SERVERNAME);
-    return 0;
-  }
-  ssl->tlsext_hostname = BUF_strdup(name);
-  if (ssl->tlsext_hostname == NULL) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_MALLOC_FAILURE);
-    return 0;
-  }
-  return 1;
-}
-
-size_t SSL_get0_certificate_types(SSL *ssl, const uint8_t **out_types) {
-  if (ssl->server || !ssl->s3->tmp.cert_req) {
-    *out_types = NULL;
-    return 0;
-  }
-  *out_types = ssl->s3->tmp.certificate_types;
-  return ssl->s3->tmp.num_certificate_types;
-}
-
-int SSL_CTX_set1_curves(SSL_CTX *ctx, const int *curves, size_t curves_len) {
-  return tls1_set_curves(&ctx->tlsext_ellipticcurvelist,
-                         &ctx->tlsext_ellipticcurvelist_length, curves,
-                         curves_len);
-}
-
-int SSL_set1_curves(SSL *ssl, const int *curves, size_t curves_len) {
-  return tls1_set_curves(&ssl->tlsext_ellipticcurvelist,
-                         &ssl->tlsext_ellipticcurvelist_length, curves,
-                         curves_len);
-}
-
-int SSL_CTX_set_tlsext_servername_callback(
-    SSL_CTX *ctx, int (*callback)(SSL *ssl, int *out_alert, void *arg)) {
-  ctx->tlsext_servername_callback = callback;
-  return 1;
-}
-
-int SSL_CTX_set_tlsext_servername_arg(SSL_CTX *ctx, void *arg) {
-  ctx->tlsext_servername_arg = arg;
-  return 1;
-}
-
-int SSL_CTX_get_tlsext_ticket_keys(SSL_CTX *ctx, void *out, size_t len) {
-  if (out == NULL) {
-    return 48;
-  }
-  if (len != 48) {
-    OPENSSL_PUT_ERROR(SSL, SSL_R_INVALID_TICKET_KEYS_LENGTH);
-    return 0;
-  }
-  uint8_t *out_bytes = out;
-  memcpy(out_bytes, ctx->tlsext_tick_key_name, 16);
-  memcpy(out_bytes + 16, ctx->tlsext_tick_hmac_key, 16);
-  memcpy(out_bytes + 32, ctx->tlsext_tick_aes_key, 16);
-  return 1;
-}
-
-int SSL_CTX_set_tlsext_ticket_keys(SSL_CTX *ctx, const void *in, size_t len) {
-  if (in == NULL) {
-    return 48;
-  }
-  if (len != 48) {
-    OPENSSL_PUT_ERROR(SSL, SSL_R_INVALID_TICKET_KEYS_LENGTH);
-    return 0;
-  }
-  const uint8_t *in_bytes = in;
-  memcpy(ctx->tlsext_tick_key_name, in_bytes, 16);
-  memcpy(ctx->tlsext_tick_hmac_key, in_bytes + 16, 16);
-  memcpy(ctx->tlsext_tick_aes_key, in_bytes + 32, 16);
-  return 1;
-}
-
-int SSL_CTX_set_tlsext_ticket_key_cb(
-    SSL_CTX *ctx, int (*callback)(SSL *ssl, uint8_t *key_name, uint8_t *iv,
-                                  EVP_CIPHER_CTX *ctx, HMAC_CTX *hmac_ctx,
-                                  int encrypt)) {
-  ctx->tlsext_ticket_key_cb = callback;
-  return 1;
 }
 
 struct ssl_cipher_preference_list_st *ssl_get_cipher_preferences(SSL *ssl) {
@@ -452,17 +242,15 @@ struct ssl_cipher_preference_list_st *ssl_get_cipher_preferences(SSL *ssl) {
     return ssl->cipher_list;
   }
 
-  if (ssl->version >= TLS1_1_VERSION && ssl->ctx != NULL &&
-      ssl->ctx->cipher_list_tls11 != NULL) {
+  if (ssl->version >= TLS1_1_VERSION && ssl->ctx->cipher_list_tls11 != NULL) {
     return ssl->ctx->cipher_list_tls11;
   }
 
-  if (ssl->version >= TLS1_VERSION && ssl->ctx != NULL &&
-      ssl->ctx->cipher_list_tls10 != NULL) {
+  if (ssl->version >= TLS1_VERSION && ssl->ctx->cipher_list_tls10 != NULL) {
     return ssl->ctx->cipher_list_tls10;
   }
 
-  if (ssl->ctx != NULL && ssl->ctx->cipher_list != NULL) {
+  if (ssl->ctx->cipher_list != NULL) {
     return ssl->ctx->cipher_list;
   }
 
@@ -505,8 +293,7 @@ const SSL_CIPHER *ssl3_choose_cipher(
     ok = 1;
 
     /* Check the TLS version. */
-    if (SSL_CIPHER_get_min_version(c) >
-        ssl3_version_from_wire(ssl, ssl->version)) {
+    if (SSL_CIPHER_get_min_version(c) > ssl3_protocol_version(ssl)) {
       ok = 0;
     }
 
@@ -578,10 +365,10 @@ int ssl3_get_req_cert_type(SSL *ssl, uint8_t *p) {
 
 /* If we are using default SHA1+MD5 algorithms switch to new SHA256 PRF and
  * handshake macs if required. */
-uint32_t ssl_get_algorithm_prf(SSL *ssl) {
+uint32_t ssl_get_algorithm_prf(const SSL *ssl) {
   uint32_t algorithm_prf = ssl->s3->tmp.new_cipher->algorithm_prf;
-  if (ssl->enc_method->enc_flags & SSL_ENC_FLAG_SHA256_PRF &&
-      algorithm_prf == SSL_HANDSHAKE_MAC_DEFAULT) {
+  if (algorithm_prf == SSL_HANDSHAKE_MAC_DEFAULT &&
+      ssl3_protocol_version(ssl) >= TLS1_2_VERSION) {
     return SSL_HANDSHAKE_MAC_SHA256;
   }
   return algorithm_prf;
