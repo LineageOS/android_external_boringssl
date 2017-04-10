@@ -140,6 +140,7 @@ void *ASN1_item_d2i_fp(const ASN1_ITEM *it, FILE *in, void *x)
 #endif
 
 #define HEADER_SIZE   8
+#define ASN1_CHUNK_INITIAL_SIZE (16 * 1024)
 static int asn1_d2i_read_bio(BIO *in, BUF_MEM **pb)
 	{
 	BUF_MEM *b;
@@ -241,7 +242,6 @@ static int asn1_d2i_read_bio(BIO *in, BUF_MEM **pb)
 						}
 				while (want > 0)
 					{
-
                                         /*
                                          * Read content in chunks of increasing size
                                          * so we can return an error for EOF without
@@ -270,7 +270,7 @@ static int asn1_d2i_read_bio(BIO *in, BUF_MEM **pb)
                                         }
                                         if (chunk_max < INT_MAX/2)
                                           chunk_max *= 2;
-					}
+                                        }
 				}
 			if (off + c.slen < off)
 				{
