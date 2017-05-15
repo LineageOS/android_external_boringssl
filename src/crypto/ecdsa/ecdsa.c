@@ -235,7 +235,7 @@ static int ecdsa_sign_setup(EC_KEY *eckey, BN_CTX *ctx_in, BIGNUM **kinvp,
                             BIGNUM **rp, const uint8_t *digest,
                             size_t digest_len) {
   BN_CTX *ctx = NULL;
-  BIGNUM *k = NULL, *r = NULL, *order = NULL, *X = NULL;
+  BIGNUM *k = NULL, *r = NULL, *order = NULL, *tmp = NULL;
   EC_POINT *tmp_point = NULL;
   const EC_GROUP *group;
   int ret = 0;
@@ -257,8 +257,8 @@ static int ecdsa_sign_setup(EC_KEY *eckey, BN_CTX *ctx_in, BIGNUM **kinvp,
   k = BN_new(); /* this value is later returned in *kinvp */
   r = BN_new(); /* this value is later returned in *rp    */
   order = BN_new();
-  X = BN_new();
-  if (!k || !r || !order || !X) {
+  tmp = BN_new();
+  if (!k || !r || !order || !tmp) {
     OPENSSL_PUT_ERROR(ECDSA, ecdsa_sign_setup, ERR_R_MALLOC_FAILURE);
     goto err;
   }
@@ -310,12 +310,12 @@ static int ecdsa_sign_setup(EC_KEY *eckey, BN_CTX *ctx_in, BIGNUM **kinvp,
       OPENSSL_PUT_ERROR(ECDSA, ecdsa_sign_setup, ERR_R_EC_LIB);
       goto err;
     }
-    if (!EC_POINT_get_affine_coordinates_GFp(group, tmp_point, X, NULL, ctx)) {
+    if (!EC_POINT_get_affine_coordinates_GFp(group, tmp_point, tmp, NULL, ctx)) {
       OPENSSL_PUT_ERROR(ECDSA, ecdsa_sign_setup, ERR_R_EC_LIB);
       goto err;
     }
 
-    if (!BN_nnmod(r, X, order, ctx)) {
+    if (!BN_nnmod(r, tmp, order, ctx)) {
       OPENSSL_PUT_ERROR(ECDSA, ecdsa_sign_setup, ERR_R_BN_LIB);
       goto err;
     }
@@ -345,7 +345,7 @@ err:
   }
   BN_free(order);
   EC_POINT_free(tmp_point);
-  BN_clear_free(X);
+  BN_clear_free(tmp);
   return ret;
 }
 
