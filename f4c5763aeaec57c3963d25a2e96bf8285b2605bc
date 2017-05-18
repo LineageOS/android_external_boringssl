@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "1a486d77_4746f3c0",
+        "filename": "src/crypto/ecdsa/ecdsa.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 325,
+      "author": {
+        "id": 16914
+      },
+      "writtenOn": "2017-05-18T09:17:09Z",
+      "side": 1,
+      "message": "If you don\u0027t change this line, then the code never uses Fermat\u0027s Little Theorem.  The commit message indicates this is the important part of this patch",
+      "range": {
+        "startLine": 325,
+        "startChar": 2,
+        "endLine": 325,
+        "endChar": 42
+      },
+      "revId": "f4c5763aeaec57c3963d25a2e96bf8285b2605bc",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
