@@ -16,6 +16,23 @@
       "revId": "d016192c6a5bf588ec2fa26624c30f0637f27ba2",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a486d77_574c5742",
+        "filename": "src/crypto/ec/ec.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 871,
+      "author": {
+        "id": 17656
+      },
+      "writtenOn": "2017-05-20T13:23:33Z",
+      "side": 1,
+      "message": "when I try to build, I get \u0027error: macro \"OPENSSL_PUT_ERROR\" requires 3 arguments, but only 2 given\u0027 - in line 544, 540, 512 for example, 3 arguments are given - the missing 2nd argument seems to be the function itself, so I suggest:\nOPENSSL_PUT_ERROR(EC, EC_POINTs_mul, EC_R_INCOMPATIBLE_OBJECTS);",
+      "revId": "d016192c6a5bf588ec2fa26624c30f0637f27ba2",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
     }
   ]
 }
