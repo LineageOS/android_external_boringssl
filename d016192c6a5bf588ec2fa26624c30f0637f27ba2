@@ -33,6 +33,23 @@
       "revId": "d016192c6a5bf588ec2fa26624c30f0637f27ba2",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a486d77_b7626bab",
+        "filename": "src/crypto/ec/ec.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 882,
+      "author": {
+        "id": 17656
+      },
+      "writtenOn": "2017-05-20T13:28:36Z",
+      "side": 1,
+      "message": "same story here (the cherry pick seems to be based on a different version of the macro:\nOPENSSL_PUT_ERROR(EC, EC_POINTs_mul, EC_R_INCOMPATIBLE_OBJECTS);",
+      "revId": "d016192c6a5bf588ec2fa26624c30f0637f27ba2",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
     }
   ]
 }
