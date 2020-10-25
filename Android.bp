@@ -229,6 +229,7 @@ cc_library_static {
         "//bootable/recovery/updater",
         "//external/conscrypt",
         "//external/python/cpython2",
+        "//external/toybox",
         "//frameworks/ml/nn:__subpackages__",
         "//hardware/interfaces/confirmationui/1.0/vts/functional",
         "//hardware/interfaces/drm/1.0/vts/functional",
@@ -258,6 +259,7 @@ cc_library_static {
         "boringssl_defaults",
         "boringssl_flags",
     ],
+    recovery_available: true,
 }
 
 //// libssl
